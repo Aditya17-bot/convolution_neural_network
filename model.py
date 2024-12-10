@@ -1,3 +1,4 @@
+from __future__ import print_function
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,28 +16,24 @@ class Net(nn.Module):
         self.dropout1 = nn.Dropout(0.05)
         
         # Block 2
-        self.conv2 = nn.Conv2d(10, 12, 3, padding=1)  # 28x28x12
-        self.bn2 = nn.BatchNorm2d(12)
+        self.conv2 = nn.Conv2d(10, 16, 3, padding=1)  # 28x28x16
+        self.bn2 = nn.BatchNorm2d(16)
         self.dropout2 = nn.Dropout(0.05)
-        self.pool1 = nn.MaxPool2d(2, 2)  # 14x14x12
+        self.pool1 = nn.MaxPool2d(2, 2)  # 14x14x16
         
         # Block 3
-        self.conv3 = nn.Conv2d(12, 14, 3, padding=1)  # 14x14x14
-        self.bn3 = nn.BatchNorm2d(14)
+        self.conv3 = nn.Conv2d(16, 16, 3, padding=1)  # 14x14x16
+        self.bn3 = nn.BatchNorm2d(16)
         self.dropout3 = nn.Dropout(0.1)
         
         # Block 4
-        self.conv4 = nn.Conv2d(14, 16, 3, padding=1)  # 14x14x16
+        self.conv4 = nn.Conv2d(16, 16, 3, padding=1)  # 14x14x16
         self.bn4 = nn.BatchNorm2d(16)
         self.dropout4 = nn.Dropout(0.1)
         self.pool2 = nn.MaxPool2d(2, 2)  # 7x7x16
         
-        # Final blocks
-        self.conv5 = nn.Conv2d(16, 16, 3, padding=1)  # 7x7x16
-        self.bn5 = nn.BatchNorm2d(16)
-        self.dropout5 = nn.Dropout(0.1)
-        
-        self.conv6 = nn.Conv2d(16, 10, 1)  # 7x7x10
+        # Final classification block
+        self.conv5 = nn.Conv2d(16, 10, 1)  # 7x7x10
         self.gap = nn.AdaptiveAvgPool2d(1)  # 1x1x10
 
     def forward(self, x):
@@ -46,12 +43,11 @@ class Net(nn.Module):
         x = self.dropout3(F.relu(self.bn3(self.conv3(x))))
         x = self.dropout4(F.relu(self.bn4(self.conv4(x))))
         x = self.pool2(x)
-        x = self.dropout5(F.relu(self.bn5(self.conv5(x))))
-        x = self.gap(self.conv6(x))
+        x = self.conv5(x)
+        x = self.gap(x)
         x = x.view(-1, 10)
         return F.log_softmax(x, dim=1)
 
-# Training and testing functions remain the same
 def train(model, device, train_loader, optimizer, scheduler, epoch):
     model.train()
     pbar = tqdm(train_loader)
@@ -62,8 +58,8 @@ def train(model, device, train_loader, optimizer, scheduler, epoch):
         loss = F.nll_loss(output, target)
         loss.backward()
         optimizer.step()
+        scheduler.step()
         pbar.set_description(desc=f'loss={loss.item():.4f} batch_id={batch_idx}')
-    scheduler.step()
 
 def test(model, device, test_loader):
     model.eval()
@@ -89,11 +85,9 @@ def main():
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    kwargs = {'num_workers': 2, 'pin_memory': True} if use_cuda else {}
-    
-    # Enhanced data augmentation
+    # Data augmentation and normalization
     train_transforms = transforms.Compose([
-        transforms.RandomRotation((-8.0, 8.0)),
+        transforms.RandomRotation((-7.0, 7.0)),
         transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
         transforms.ToTensor(),
         transforms.Normalize((0.1307,), (0.3081,))
@@ -104,6 +98,7 @@ def main():
         transforms.Normalize((0.1307,), (0.3081,))
     ])
 
+    kwargs = {'num_workers': 2, 'pin_memory': True} if use_cuda else {}
     train_loader = torch.utils.data.DataLoader(
         datasets.MNIST('../data', train=True, download=True,
                       transform=train_transforms),
@@ -119,7 +114,7 @@ def main():
     total_params = sum(p.numel() for p in model.parameters())
     print(f'Total Parameters: {total_params}')
     
-    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
+    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.OneCycleLR(
         optimizer, 
         max_lr=0.1,
