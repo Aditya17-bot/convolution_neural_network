@@ -125,13 +125,19 @@ def main():
         final_div_factor=100
     )
 
+    best_accuracy = 0
     for epoch in range(1, epochs + 1):
         print(f'Epoch {epoch}')
         train(model, device, train_loader, optimizer, scheduler, epoch)
         accuracy = test(model, device, test_loader)
+        best_accuracy = max(best_accuracy, accuracy)
+        print(f"Epoch {epoch}: Accuracy: {accuracy:.2f}%")
         if accuracy >= 99.4:
-            print(f"Achieved 99.4% accuracy at epoch {epoch}. Stopping training.")
-            break
+            print(f"Achieved 99.4% accuracy at epoch {epoch}.")
+    
+    print(f"Training completed.")
+    print(f"Final Test Accuracy: {accuracy:.2f}%")
+    print(f"Best Test Accuracy: {best_accuracy:.2f}%")
 
 if __name__ == '__main__':
     main() 
